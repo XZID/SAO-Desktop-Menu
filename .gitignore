@@ -1,0 +1,13 @@
+# Personal / generated files - never upload these
+apps.json
+.edge-profile/
+.icons/
+launcher.log
+.running.json
+.wallpaper-backup.json
+__pycache__/
+*.pyc
+
+# Build output
+share/
+*.zip
