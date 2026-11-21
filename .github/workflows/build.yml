@@ -27,11 +27,15 @@ jobs:
       - name: Install the build tools (only on GitHub's machine)
         run: python -m pip install --upgrade pip pyinstaller pillow
 
+      - name: Make sure the sounds folder exists (it holds the optional LINK START voice)
+        shell: pwsh
+        run: New-Item -ItemType Directory -Force sounds | Out-Null
+
       - name: Turn the menu into "SAO Desktop Menu.exe"
         run: >
           pyinstaller --noconfirm --windowed --name "SAO Desktop Menu" --icon app.ico
           --add-data "sao-desktop.html;." --add-data "icons.ps1;." --add-data "LICENSE.txt;."
-          --add-data "wallpapers;wallpapers" launcher.py
+          --add-data "wallpapers;wallpapers" --add-data "sounds;sounds" launcher.py
 
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
