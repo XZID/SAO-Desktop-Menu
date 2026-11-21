@@ -97,6 +97,7 @@
   .ed .empty{color:var(--muted);font-style:italic;}
   .ed .tipline{margin-top:6px;font-size:12px;color:var(--muted);}
   .ed .vnow{font-size:13px;color:var(--text);}
+  .ed .vnow .saved{color:#2f9e44;font-weight:600;font-size:12px;}
   .ed .vbtns{flex-wrap:wrap;}
   .mini.on{border-color:var(--accent);background:rgba(243,156,31,.14);color:#b36a00;}
   @keyframes flash{0%,100%{filter:none}40%{filter:brightness(1.6)}}
@@ -517,9 +518,12 @@ async function openEditor(rowEl, keep){
     sfx.launch(); toast('Added ' + name + ' to ' + sel.value.replace('/', ' › '));
     refreshMenu();
   };
-  const showVoice = v=>{
+  const showVoice = (v, justSaved)=>{
     const box = $('edVoice'); if(!box || !v) return;
     box.textContent = v.mode === 'custom' ? 'Now: your clip (' + v.name + ')' : v.mode === 'off' ? 'Now: no voice' : 'Now: Windows built-in voice';
+    const ok = document.createElement('span'); ok.className = 'saved';
+    ok.textContent = justSaved ? '  ✓ Saved, used every time the PC starts' : '  ✓ Saved';
+    box.appendChild(ok);
     ['vChoose','vBuilt','vOff'].forEach(id=>$(id).classList.toggle('on', (id==='vChoose'&&v.mode==='custom')||(id==='vBuilt'&&v.mode==='builtin')||(id==='vOff'&&v.mode==='off')));
   };
   showVoice(conf.voice);
@@ -527,7 +531,7 @@ async function openEditor(rowEl, keep){
     const j = await cfg({action}).catch(()=>({ok:false, error:'Helper not running'}));
     if(j.cancelled) return;
     if(!j.ok){ sfx.error(); return toast(j.error || "Couldn't change the voice", true); }
-    introAudio = null; showVoice(j.voice); sfx.pick();
+    introAudio = null; showVoice(j.voice, true); sfx.pick();
     toast(j.voice.mode === 'custom' ? 'Intro voice: ' + j.voice.name : j.voice.mode === 'off' ? 'Intro voice turned off' : 'Intro voice: Windows built-in');
   };
   $('vChoose').onclick = e=>{ e.stopPropagation(); setVoice('voice_choose'); };
