@@ -91,6 +91,15 @@ Everything is also in `apps.json` (created on first run):
 | `move` | `{"Wallpaper Engine": "Creative"}` | Put an app in another (sub)category, e.g. `"Work/Office"` |
 | `extra` | `[{"category": "Games", "name": "Minecraft", "target": "C:\\...\\Minecraft.exe"}]` | Add your own apps, folders or websites |
 
+## LINK START voice
+
+When the optional intro plays, it uses the first voice it finds:
+
+1. **Your own clip**: put any audio file on your PC and add `"intro_voice": "C:\path\to\clip.mp3"` to `apps.json`
+   (or `"intro_voice": false` to always use Windows' built-in voice).
+2. **The voice that ships with the app**: `sounds/link-start.mp3` (or `.m4a` / `.wav` / `.ogg`).
+3. **Windows' built-in voice** saying "Link start", if neither of the above exists.
+
 ## How it works
 
 - `launcher.py` is a small local helper. It scans your Start menu, finds the icons (`icons.ps1`), sets the wallpaper, and watches for the middle-button swipe on the desktop.

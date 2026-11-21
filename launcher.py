@@ -148,13 +148,26 @@ def default_user_config():
     }
 
 
+VOICE_EXT = (".mp3", ".m4a", ".wav", ".ogg")
+
+
 def intro_voice_file():
-    """Optional "intro_voice" in apps.json: an audio file (mp3/wav/m4a/ogg) played instead of the built-in voice."""
+    """Voice for the LINK START intro, in this order:
+    1. "intro_voice" in apps.json - your own clip (set it to false to always use Windows' built-in voice)
+    2. sounds/link-start.mp3 (or .m4a/.wav/.ogg) that ships with the app
+    3. nothing -> Windows' built-in voice says "Link start"."""
     p = load_user_config().get("intro_voice")
-    if not p:
+    if p is False:
         return None
-    p = p if os.path.isabs(p) else os.path.join(DATA, p)
-    return p if os.path.isfile(p) and os.path.splitext(p)[1].lower() in (".mp3", ".wav", ".m4a", ".ogg") else None
+    if p:
+        p = p if os.path.isabs(p) else os.path.join(DATA, p)
+        if os.path.isfile(p) and os.path.splitext(p)[1].lower() in VOICE_EXT:
+            return p
+    for ext in VOICE_EXT:
+        q = os.path.join(RES, "sounds", "link-start" + ext)
+        if os.path.isfile(q):
+            return q
+    return None
 
 
 def load_user_config():
