@@ -576,6 +576,7 @@ const introEl = document.getElementById('intro'), introC = document.getElementBy
       introTxt = document.getElementById('introTxt'), introFlash = document.getElementById('introFlash');
 const ictx = introC.getContext('2d');
 let introOn = false, introT0 = 0, introSkip = false, introDone = null;
+let introAudio = null;          // your own voice clip (apps.json "intro_voice"), if set
 const HUES = [0, 28, 48, 130, 175, 200, 220, 265, 300, 330];
 
 function introSound(){
@@ -583,7 +584,8 @@ function introSound(){
   try{
     ac = ac || new (window.AudioContext||window.webkitAudioContext)();
     const t = ac.currentTime;
-    tone([523, 784, 1047], .35, 'sine', .05, .07);                    // start chime
+    const q = introAudio ? .4 : 1;                                     // quieter under your voice clip
+    tone([523, 784, 1047], .35, 'sine', .05*q, .07);                  // start chime
     // rushing "whoosh": noise through a filter that sweeps upward
     const len = Math.floor(ac.sampleRate * 3.2), buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
     for(let i=0;i<len;i++) d[i] = Math.random()*2 - 1;
@@ -591,13 +593,18 @@ function introSound(){
     const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.4;
     bp.frequency.setValueAtTime(180, t + .7); bp.frequency.exponentialRampToValueAtTime(7000, t + 3.3);
     const g = ac.createGain();
-    g.gain.setValueAtTime(0, t + .7); g.gain.linearRampToValueAtTime(.16, t + 3.0); g.gain.exponentialRampToValueAtTime(.0001, t + 3.7);
+    g.gain.setValueAtTime(0, t + .7); g.gain.linearRampToValueAtTime(.16*q, t + 3.0); g.gain.exponentialRampToValueAtTime(.0001, t + 3.7);
     src.connect(bp).connect(g).connect(ac.destination); src.start(t + .7); src.stop(t + 3.8);
     setTimeout(()=>tone([1047, 1319, 1568, 2093, 2637], .9, 'sine', .045, .04), 3250);   // bright chord at the flash
   }catch(e){}
 }
 function introVoice(){
-  if(muted || !('speechSynthesis' in window)) return;
+  if(muted) return;
+  if(introAudio){                                   // your clip instead of the built-in voice
+    try{ introAudio.currentTime = 0; introAudio.volume = .95; introAudio.play().catch(()=>{}); }catch(e){}
+    return;
+  }
+  if(!('speechSynthesis' in window)) return;
   try{
     const u = new SpeechSynthesisUtterance('Link start');
     u.rate = .92; u.pitch = 1.05; u.volume = .9;
@@ -618,7 +625,7 @@ function playIntroAnim(onDone){
   const rings = [];
   let lastRing = 0, last = performance.now();
   introT0 = last;
-  introSound(); setTimeout(introVoice, 120);
+  introSound(); if(introAudio) introVoice(); else setTimeout(introVoice, 120);
 
   function frame(now){
     if(!introOn) return;
@@ -893,10 +900,16 @@ if(WALL){
     }
     if(m.type==='close'){ if(isOpen) closeMenu(); }
     if(m.type==='intro'){
-      fetch('/settings',{cache:'no-store'}).then(r=>r.json()).then(j=>{ muted = !j.sound; }).catch(()=>{});
+      const ready = fetch('/settings',{cache:'no-store'}).then(r=>r.json()).then(j=>{
+        muted = !j.sound;
+        if(j.intro_voice && !introAudio){
+          introAudio = new Audio('/intro-voice'); introAudio.preload = 'auto';
+          return new Promise(res=>{ introAudio.oncanplaythrough = res; introAudio.onerror = ()=>{ introAudio = null; res(); }; setTimeout(res, 1500); });
+        }
+      }).catch(()=>{});
       const begin = ()=>{
         fetch('/show',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).catch(()=>{});
-        const go = ()=>playIntroAnim(()=>notifyClosed());
+        const go = ()=>ready.then(()=>playIntroAnim(()=>notifyClosed()));
         if(document.visibilityState === 'visible') return go();
         const h = ()=>{ if(document.visibilityState === 'visible'){ document.removeEventListener('visibilitychange', h); go(); } };
         document.addEventListener('visibilitychange', h);

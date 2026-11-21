@@ -148,6 +148,15 @@ def default_user_config():
     }
 
 
+def intro_voice_file():
+    """Optional "intro_voice" in apps.json: an audio file (mp3/wav/m4a/ogg) played instead of the built-in voice."""
+    p = load_user_config().get("intro_voice")
+    if not p:
+        return None
+    p = p if os.path.isabs(p) else os.path.join(DATA, p)
+    return p if os.path.isfile(p) and os.path.splitext(p)[1].lower() in (".mp3", ".wav", ".m4a", ".ogg") else None
+
+
 def load_user_config():
     try:
         with open(CONFIG, encoding="utf-8") as f:
@@ -793,7 +802,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                                  for e in cfg.get("extra", [])]}, ensure_ascii=False))
         elif path == "/settings":
             cfg = load_user_config()
-            self.send(200, json.dumps({"sound": bool(cfg.get("sound", True)), "intro": bool(cfg.get("intro", False))}))
+            self.send(200, json.dumps({"sound": bool(cfg.get("sound", True)), "intro": bool(cfg.get("intro", False)),
+                                       "intro_voice": bool(intro_voice_file())}))
+        elif path == "/intro-voice":
+            f = intro_voice_file()
+            if f:
+                ctype = {".mp3": "audio/mpeg", ".wav": "audio/wav", ".m4a": "audio/mp4", ".ogg": "audio/ogg"}.get(
+                    os.path.splitext(f)[1].lower(), "application/octet-stream")
+                with open(f, "rb") as fh:
+                    self.send(200, fh.read(), ctype)
+            else:
+                self.send(404, '{"error":"no intro voice"}')
         elif path == "/wallpaper.png":
             with open(wallpaper_file(), "rb") as f:
                 self.send(200, f.read(), "image/png")

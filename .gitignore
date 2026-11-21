@@ -11,3 +11,6 @@ __pycache__/
 # Build output
 share/
 *.zip
+
+# personal intro voice clips - not for sharing
+voice/
