@@ -157,7 +157,7 @@ def intro_voice_file():
     2. sounds/link-start.mp3 (or .m4a/.wav/.ogg) that ships with the app
     3. nothing -> Windows' built-in voice says "Link start"."""
     p = load_user_config().get("intro_voice")
-    if p is False:
+    if p is False or p == "off":
         return None
     if p:
         p = p if os.path.isabs(p) else os.path.join(DATA, p)
@@ -170,14 +170,43 @@ def intro_voice_file():
     return None
 
 
+def voice_info():
+    """What the LINK START intro will say: {"mode": "custom"|"builtin"|"off", "name": file name}."""
+    if load_user_config().get("intro_voice") == "off":
+        return {"mode": "off", "name": ""}
+    f = intro_voice_file()
+    return {"mode": "custom", "name": os.path.basename(f)} if f else {"mode": "builtin", "name": ""}
+
+
+_last_good_config = None
+
+
 def load_user_config():
+    """Read apps.json. Never throws away the user's settings: if the file can't be read (half-written,
+    edited by hand, saved with a byte-order mark...), keep using the last good copy and leave the file
+    alone; only with no good copy at all is it backed up first and replaced with defaults."""
+    global _last_good_config
     try:
-        with open(CONFIG, encoding="utf-8") as f:
+        with open(CONFIG, encoding="utf-8-sig") as f:      # -sig: also accepts files saved with a BOM
             cfg = json.load(f)
-        if "categories" in cfg:          # old format from the first version -> replace
-            raise ValueError
+        if not isinstance(cfg, dict) or "categories" in cfg:   # very first version used another format
+            raise ValueError("old or unknown format")
+        _last_good_config = cfg
         return cfg
-    except Exception:
+    except FileNotFoundError:
+        cfg = default_user_config()
+        save_user_config(cfg)
+        return cfg
+    except Exception as e:  # noqa: BLE001
+        if _last_good_config is not None:
+            log("apps.json could not be read (%s) - still using the last good settings" % e)
+            return json.loads(json.dumps(_last_good_config))
+        backup = CONFIG + time.strftime(".unreadable-%Y%m%d-%H%M%S")
+        try:
+            os.replace(CONFIG, backup)
+            log("apps.json could not be read (%s) - kept it as %s and started fresh" % (e, os.path.basename(backup)))
+        except OSError:
+            pass
         cfg = default_user_config()
         save_user_config(cfg)
         return cfg
@@ -335,7 +364,10 @@ def extract_missing_icons(cats):
         _icon_lock.release()
 
 
-def browse_for_file():
+AUDIO_TYPES = [("Audio files", "*.mp3 *.m4a *.wav *.ogg"), ("All files", "*.*")]
+
+
+def browse_for_file(title="Choose an app, shortcut or file", filetypes=None, initialdir=None):
     """Normal Windows 'Open' dialog, shown above the menu."""
     LIVE.dialog_open = True
     try:
@@ -345,9 +377,9 @@ def browse_for_file():
         root.withdraw()
         root.attributes("-topmost", True)
         path = filedialog.askopenfilename(
-            parent=root, title="Choose an app, shortcut or file",
-            initialdir=os.path.join(os.environ.get("ProgramData", r"C:\ProgramData"),
-                                    r"Microsoft\Windows\Start Menu\Programs"),
+            parent=root, title=title,
+            initialdir=initialdir or os.path.join(os.environ.get("ProgramData", r"C:\ProgramData"),
+                                                  r"Microsoft\Windows\Start Menu\Programs"),
             filetypes=[("Apps and shortcuts", "*.exe *.lnk *.url *.bat *.cmd"), ("All files", "*.*")])
         root.destroy()
         return os.path.normpath(path) if path else ""
@@ -364,6 +396,27 @@ def edit_config(req):
     name = str(req.get("name", "")).strip()
     extras = cfg.setdefault("extra", [])
     hide = cfg.setdefault("hide", [])
+    if action == "voice_choose":
+        src = browse_for_file("Choose a LINK START voice clip", AUDIO_TYPES, os.path.expanduser("~"))
+        if not src:
+            return {"ok": False, "cancelled": True}
+        ext = os.path.splitext(src)[1].lower()
+        if ext not in VOICE_EXT:
+            return {"ok": False, "error": "Please pick an mp3, m4a, wav or ogg file"}
+        if os.path.getsize(src) > 15 * 1024 * 1024:
+            return {"ok": False, "error": "That file is too big for an intro (max 15 MB)"}
+        os.makedirs(os.path.join(DATA, "voice"), exist_ok=True)
+        dst = os.path.join(DATA, "voice", os.path.basename(src))
+        if os.path.normcase(os.path.abspath(src)) != os.path.normcase(os.path.abspath(dst)):
+            import shutil
+            shutil.copyfile(src, dst)            # keep a copy, so it works even if the original moves
+        cfg["intro_voice"] = "voice/" + os.path.basename(src)
+        save_user_config(cfg); log("edit: intro voice ->", cfg["intro_voice"])
+        return {"ok": True, "voice": voice_info()}
+    if action in ("voice_builtin", "voice_off"):
+        cfg["intro_voice"] = False if action == "voice_builtin" else "off"
+        save_user_config(cfg); log("edit:", action)
+        return {"ok": True, "voice": voice_info()}
     if action == "browse":
         path = browse_for_file()
         stem = os.path.splitext(os.path.basename(path))[0] if path else ""
@@ -812,11 +865,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send(200, json.dumps({"places": menu_places(), "hidden": cfg.get("hide", []),
                                        "extra": [{"name": e["name"], "target": e["target"],
                                                   "place": e.get("category", "Other") + ("/" + e["group"] if e.get("group") else "")}
-                                                 for e in cfg.get("extra", [])]}, ensure_ascii=False))
+                                                 for e in cfg.get("extra", [])],
+                                       "voice": voice_info()}, ensure_ascii=False))
         elif path == "/settings":
             cfg = load_user_config()
             self.send(200, json.dumps({"sound": bool(cfg.get("sound", True)), "intro": bool(cfg.get("intro", False)),
-                                       "intro_voice": bool(intro_voice_file())}))
+                                       "intro_voice": bool(intro_voice_file()),
+                                       "intro_voice_off": load_user_config().get("intro_voice") == "off"}))
         elif path == "/intro-voice":
             f = intro_voice_file()
             if f:

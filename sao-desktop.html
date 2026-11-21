@@ -96,6 +96,9 @@
   .eitem span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .ed .empty{color:var(--muted);font-style:italic;}
   .ed .tipline{margin-top:6px;font-size:12px;color:var(--muted);}
+  .ed .vnow{font-size:13px;color:var(--text);}
+  .ed .vbtns{flex-wrap:wrap;}
+  .mini.on{border-color:var(--accent);background:rgba(243,156,31,.14);color:#b36a00;}
   @keyframes flash{0%,100%{filter:none}40%{filter:brightness(1.6)}}
 
   /* ---------- HUD bits ---------- */
@@ -471,6 +474,10 @@ async function openEditor(rowEl, keep){
         <div class="line"><input id="edPath" placeholder="C:\\...\\app.exe  or  https://..." autocomplete="off"><button class="mini" id="edBrowse">Browse…</button></div></label>
       <label>Put it in<select id="edPlace"></select></label>
       <button class="mini primary" id="edAdd">Add to menu</button>
+      <div class="eh">LINK START voice</div>
+      <div class="vnow" id="edVoice"></div>
+      <div class="line vbtns"><button class="mini" id="vChoose">Choose file…</button><button class="mini" id="vBuilt">Built-in</button><button class="mini" id="vOff">Off</button><button class="mini" id="vTest">▶ Test</button></div>
+      <div class="tipline">Use a recording you made, or a clip you're allowed to use (mp3, m4a, wav or ogg).</div>
       <div class="eh">Added by you</div><div id="edExtra" class="elist"></div>
       <div class="eh">Removed from menu</div><div id="edHidden" class="elist"></div>
       <div class="tipline">Tip: right-click any app in the menu to remove it.</div>
@@ -509,6 +516,31 @@ async function openEditor(rowEl, keep){
     if(!j.ok){ sfx.error(); return toast(j.error || "Couldn't add it", true); }
     sfx.launch(); toast('Added ' + name + ' to ' + sel.value.replace('/', ' › '));
     refreshMenu();
+  };
+  const showVoice = v=>{
+    const box = $('edVoice'); if(!box || !v) return;
+    box.textContent = v.mode === 'custom' ? 'Now: your clip (' + v.name + ')' : v.mode === 'off' ? 'Now: no voice' : 'Now: Windows built-in voice';
+    ['vChoose','vBuilt','vOff'].forEach(id=>$(id).classList.toggle('on', (id==='vChoose'&&v.mode==='custom')||(id==='vBuilt'&&v.mode==='builtin')||(id==='vOff'&&v.mode==='off')));
+  };
+  showVoice(conf.voice);
+  const setVoice = async action=>{
+    const j = await cfg({action}).catch(()=>({ok:false, error:'Helper not running'}));
+    if(j.cancelled) return;
+    if(!j.ok){ sfx.error(); return toast(j.error || "Couldn't change the voice", true); }
+    introAudio = null; showVoice(j.voice); sfx.pick();
+    toast(j.voice.mode === 'custom' ? 'Intro voice: ' + j.voice.name : j.voice.mode === 'off' ? 'Intro voice turned off' : 'Intro voice: Windows built-in');
+  };
+  $('vChoose').onclick = e=>{ e.stopPropagation(); setVoice('voice_choose'); };
+  $('vBuilt').onclick  = e=>{ e.stopPropagation(); setVoice('voice_builtin'); };
+  $('vOff').onclick    = e=>{ e.stopPropagation(); setVoice('voice_off'); };
+  $('vTest').onclick   = async e=>{
+    e.stopPropagation();
+    const v = (await (await fetch('/config',{cache:'no-store'})).json()).voice;
+    if(v.mode === 'off') return toast('The intro voice is off');
+    if(v.mode === 'custom'){ const a = new Audio('/intro-voice?t=' + Date.now()); a.volume = .95; a.play().catch(()=>toast("Couldn't play that file", true)); return; }
+    try{ const u = new SpeechSynthesisUtterance('Link start'); u.rate = .92; u.pitch = 1.05;
+         const vv = speechSynthesis.getVoices().find(x=>/^en/i.test(x.lang)); if(vv) u.voice = vv;
+         speechSynthesis.cancel(); speechSynthesis.speak(u); }catch(err){}
   };
   p.list.querySelectorAll('input,select,button').forEach(el=>el.addEventListener('click', e=>e.stopPropagation()));
   placePanel(p, rowTop(rowEl) - 200);
@@ -577,6 +609,7 @@ const introEl = document.getElementById('intro'), introC = document.getElementBy
 const ictx = introC.getContext('2d');
 let introOn = false, introT0 = 0, introSkip = false, introDone = null;
 let introAudio = null;          // your own voice clip (apps.json "intro_voice"), if set
+let introVoiceOff = false;      // "intro_voice": "off" -> no voice at all
 const HUES = [0, 28, 48, 130, 175, 200, 220, 265, 300, 330];
 
 function introSound(){
@@ -599,7 +632,7 @@ function introSound(){
   }catch(e){}
 }
 function introVoice(){
-  if(muted) return;
+  if(muted || introVoiceOff) return;
   if(introAudio){                                   // your clip instead of the built-in voice
     try{ introAudio.currentTime = 0; introAudio.volume = .95; introAudio.play().catch(()=>{}); }catch(e){}
     return;
@@ -901,9 +934,9 @@ if(WALL){
     if(m.type==='close'){ if(isOpen) closeMenu(); }
     if(m.type==='intro'){
       const ready = fetch('/settings',{cache:'no-store'}).then(r=>r.json()).then(j=>{
-        muted = !j.sound;
-        if(j.intro_voice && !introAudio){
-          introAudio = new Audio('/intro-voice'); introAudio.preload = 'auto';
+        muted = !j.sound; introVoiceOff = !!j.intro_voice_off; introAudio = null;
+        if(j.intro_voice){
+          introAudio = new Audio('/intro-voice?t=' + Date.now()); introAudio.preload = 'auto';
           return new Promise(res=>{ introAudio.oncanplaythrough = res; introAudio.onerror = ()=>{ introAudio = null; res(); }; setTimeout(res, 1500); });
         }
       }).catch(()=>{});

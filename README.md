@@ -19,7 +19,7 @@ buttons slides down, with every app on your PC sorted into categories.
 - **Subcategories:** Games → *Games / Launchers*, Web & Chat → *Web / Chat*, Work → *Office / Dev Tools / Engineering*, Other → *System*. They open as a second sliding panel.
 - **Real app icons:** uses the same icons as the Windows Start menu.
 - **Type to search:** start typing while the menu is open, then press Enter to launch.
-- **Edit it from the menu:** *Other › Edit menu* lets you add apps (with a Browse button), remove them and restore them. You can also right-click any app to remove it.
+- **Edit it from the menu:** *Other › Edit menu* lets you add apps (with a Browse button), remove and restore them, and pick your own LINK START voice. You can also right-click any app to remove it.
 - **SAO-style wallpapers:** black, night, sky and sunset, in 1080p and 1440p.
 - **Optional LINK START intro:** when the PC starts, the screen goes black, "LINK START" lights up, and you rush through a tunnel of light into your desktop. Skip it with any click or key; turn it on or off in the installer or with `"intro"`.
 - **Sound effects:** small chimes made on the fly, with no audio files.
@@ -93,12 +93,17 @@ Everything is also in `apps.json` (created on first run):
 
 ## LINK START voice
 
-When the optional intro plays, it uses the first voice it finds:
+The intro can speak "Link start" in three ways. Change it any time in **Other › Edit menu › LINK START voice**:
 
-1. **Your own clip**: put any audio file on your PC and add `"intro_voice": "C:\path\to\clip.mp3"` to `apps.json`
-   (or `"intro_voice": false` to always use Windows' built-in voice).
-2. **The voice that ships with the app**: `sounds/link-start.mp3` (or `.m4a` / `.wav` / `.ogg`).
-3. **Windows' built-in voice** saying "Link start", if neither of the above exists.
+| Button | What you hear |
+|---|---|
+| **Choose file…** | your own clip: a recording you made, or one you're allowed to use (mp3, m4a, wav, ogg) |
+| **Built-in** | Windows' voice saying "Link start" (the default) |
+| **Off** | no voice, just the sound effects |
+| **▶ Test** | plays the current choice |
+
+The app doesn't come with a voice clip of its own. Your file is copied into the app's settings folder, so it keeps
+working even if you move the original. (Advanced: the same setting is `"intro_voice"` in `apps.json`.)
 
 ## How it works
 
